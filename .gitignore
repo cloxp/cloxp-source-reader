@@ -1,3 +1,5 @@
 /pom.xml
 /target/
 /.nrepl-port
+/rel-path
+/.lein-failures

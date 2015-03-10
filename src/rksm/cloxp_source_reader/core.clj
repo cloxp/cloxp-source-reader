@@ -6,12 +6,27 @@
   (:import (java.io LineNumberReader InputStreamReader PushbackReader)
            (clojure.lang RT)))
 
+(defn name-of-def
+  [form]
+  (first (drop 1 (filter symbol? form))))
+
+(defn def?
+  [form]
+  (and (seq? form)
+       (->> form first str (re-find #"(^|\/)def") boolean)))
+
 (defn purge-string!
   [rdr]
   (let [buf (-> rdr .rdr .source_log_frames var-get :buffer)
         str (.toString buf)]
     (.delete buf 0 (count str))
     str))
+
+(defn read-with-source-logger
+  "reads a single next obj from *current-code* :source"
+  [src]
+  (let [rdr (trt/source-logging-push-back-reader src)]
+    (tr/read rdr)))
 
 (defn read-objs
   "Reads sexps from rdr-or-src and returns them as a {:form :source :line
@@ -35,7 +50,9 @@
             (when (= \newline (trt/peek-char rdr))
               (trt/read-char rdr)
               (purge-string! rdr))
-            (recur (conj result {:form o ;(with-meta o (assoc (meta o) :source src))
+            (recur (conj result {:form (if (def? o)
+                                         (with-meta o (assoc (meta o) :source src))
+                                         o)
                                  :source src
                                  :line line
                                  :column column})))
