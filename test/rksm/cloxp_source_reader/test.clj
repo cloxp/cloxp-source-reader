@@ -4,6 +4,21 @@
             [rksm.cloxp-source-reader.ast-reader :as ast-rdr]
             (rksm.cloxp-source-reader.test dummy-1 dummy-3)))
 
+(deftest source-reader-matches-interns
+  (remove-ns 'rksm.cloxp-source-reader.test.dummy-3)
+  (require 'rksm.cloxp-source-reader.test.dummy-3 :reload)
+  (let [src (slurp (clojure.java.io/resource "rksm/cloxp_source_reader/test/dummy_3.clj"))
+        infos (into [{:ns (find-ns 'rksm.cloxp-source-reader.test.dummy-3),
+                      :name 'non-existing,
+                      :file "rksm/cloxp_source_reader/test.clj",
+                      :end-column 14, :end-line 2,
+                      :column 13, :line 1}]
+                    (map meta (vals (ns-interns 'rksm.cloxp-source-reader.test.dummy-3))))
+        ; infos (map meta (vals (ns-interns 'rksm.cloxp-source-reader.test.dummy-3)))
+
+        result (src-rdr/add-source-to-interns-with-reader (java.io.StringReader. src) infos)
+        expected ['x 'dummy-atom 'test-func 'foo]]
+    (is (= expected (map :name result)))))
 
 (deftest ast-reader-reading
 
@@ -16,7 +31,7 @@
          (src-rdr/read-objs "(ns rksm.cloxp-source-reader.test.dummy-3)\n  (def x 23)\n")))))
 
 (deftest ast-reader-parsing
-  
+
   (testing "parse source"
     (let [src "(ns rksm.cloxp-source-reader.test.dummy-3)\n  (defmacro b [] `~23)\n(+ 2 3)\n(defn foo [] `~23)\n"
           expected [{:ns 'rksm.cloxp-source-reader.test.dummy-3,
@@ -37,29 +52,29 @@
 ;   (testing "get source for intern"
 ;     (is (= "(def x 23)"
 ;           (source-for-symbol 'rksm.cloxp-source-reader.test.dummy-1/x))))
-  
+
   (testing "extract meta entities from source"
-    
+
     (testing "meta entities match source"
       (is (= [{:source "(def x 23)" :column 1,:line 1}
               {:source "(def y 24)" :column 1,:line 2}]
              (let [entities [{:column 1,:line 1} {:column 1,:line 2}]
                    source (java.io.StringReader. "(def x 23)\n(def y 24)\n")]
                (src-rdr/add-source-to-interns-with-reader source entities)))))
-    
+
     (testing "less meta entities than source"
       (is (= [{:source "(def x 23)" :column 1,:line 1}
               {:source "(def y 24)" :column 1,:line 6}]
              (let [entities [{:column 1,:line 1} {:column 1,:line 6}]
                    source (java.io.StringReader. "(def x 23)\n(def baz\n\n99)\n\n(def y 24)\n")]
                (src-rdr/add-source-to-interns-with-reader source entities)))))
-    
+
     (testing "more meta entities than source"
       (is (= [{:source "(def x 23)" :column 1,:line 1} {:source "" :column 1,:line 6}]
              (let [entities [{:column 1,:line 1} {:column 1,:line 6}]
                    source (java.io.StringReader. "(def x 23)")]
                (src-rdr/add-source-to-interns-with-reader source entities)))))
-    
+
     (testing "not entities in source"
       "this might be kind of unexpected but the reader des not care bout lines"
       (is (= [{:source "(def y 24)" :column 1,:line 3} {:source "" :column 1,:line 6}]
@@ -70,4 +85,5 @@
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 (comment
- (test-ns 'rksm.cloxp-source-reader.test))
+ (test-ns 'rksm.cloxp-source-reader.test)
+ )

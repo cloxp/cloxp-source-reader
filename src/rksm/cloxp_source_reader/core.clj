@@ -70,25 +70,32 @@
                            i)))]
     (if (= :unknown *read-eval*)
       (throw (IllegalStateException. "Unable to read source while *read-eval* is :unknown."))
-      (tr/read (PushbackReader. pbr) false nil))
-    (str text)))
+      (let [form (tr/read (PushbackReader. pbr) false nil)
+            source (str text)]
+        {:form form, :source source}))))
 
 (defn- read-entity-source
   "goes forward in line numbering reader until line of entity is reached and
   reads that as an object"
-  [{lrdr :lrdr, sources :sources, :as record} meta-entity]
-  (or (if-let [line (:line meta-entity)]
-        (do
-          (dotimes [_ (dec (- line (.getLineNumber lrdr)))] (.readLine lrdr))
-          (let [new-meta (merge meta-entity {:source (read-next-obj lrdr)})]
-            (update-in record [:sources] conj new-meta))))
+  [{:keys [lrdr sources], :as record} {expected-name :name, :as meta-entity}]
+  lrdr
+  (or (when-let [line (:line meta-entity)]
+        (dotimes [_ (dec (- line (.getLineNumber lrdr)))] (.readLine lrdr))
+        (let [{:keys [form source]} (read-next-obj lrdr)
+              name (name-of-def form)
+              new-meta (merge meta-entity {:source source})]
+          (if (or (nil? expected-name) (= name (:name meta-entity)))
+            (update-in record [:sources] conj new-meta)
+            record)))
       record))
 
 (defn add-source-to-interns-with-reader
   "interns are supposed to be meta-data-like maps, at least including :line for
   the entity to be read"
   [rdr interns]
-  (let [source-data {:lrdr (LineNumberReader. rdr), :sources []}]
+  {:pre [every? #(number? (:line %)) interns]}
+  (let [interns (sort-by :line interns)
+        source-data {:lrdr (LineNumberReader. rdr), :sources []}]
     (if-let [result (reduce read-entity-source source-data interns)]
       (:sources result)
       interns)))
