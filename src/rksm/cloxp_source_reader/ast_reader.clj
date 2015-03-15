@@ -37,7 +37,7 @@
   (let [read (read-objs src)
         forms (map :form read)
         ast (ana-jvm/analyze
-             (list forms)
+             forms
              {:context :eval, :locals {}, :ns namespace})
         defs (find-defs ast)]
     (merge-read-objs-with-ast defs read)))

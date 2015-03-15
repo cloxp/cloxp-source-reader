@@ -25,9 +25,12 @@
   (testing "simple read"
     (is (= [{:form '(ns rksm.cloxp-source-reader.test.dummy-3),
              :source "(ns rksm.cloxp-source-reader.test.dummy-3)",
-             :line 1,
-             :column 1}
-            {:form '(def x 23), :source "(def x 23)", :line 2, :column 3}]
+             :line 1, :column 1
+             :end-line 2, :end-column 1}
+            {:form '(def x 23), :source "(def x 23)",
+             :name 'x
+             :line 2, :column 3,
+             :end-line 3, :end-column 1}]
          (src-rdr/read-objs "(ns rksm.cloxp-source-reader.test.dummy-3)\n  (def x 23)\n")))))
 
 (deftest ast-reader-parsing
@@ -37,11 +40,15 @@
           expected [{:ns 'rksm.cloxp-source-reader.test.dummy-3,
                      :name 'foo,
                      :source "(defn foo [] `~23)",
-                     :line 4}
+                     :line 4
+                    ;  :column 1 :end-line 3, :end-column 1
+                     }
                     {:ns 'rksm.cloxp-source-reader.test.dummy-3,
                      :name 'b,
                      :source "(defmacro b [] `~23)"
-                     :line 2}]]
+                     :line 2,
+                    ;  :column 1, :end-line 3, :end-column 1
+                     }]]
       (is (= expected
              (map #(select-keys % [:name :ns :source :line])
                   (ast-rdr/read-and-parse src 'rksm.cloxp-source-reader.test.dummy-3)))))))
@@ -70,14 +77,14 @@
                (src-rdr/add-source-to-interns-with-reader source entities)))))
 
     (testing "more meta entities than source"
-      (is (= [{:source "(def x 23)" :column 1,:line 1} {:source "" :column 1,:line 6}]
+      (is (= [{:source "(def x 23)" :column 1,:line 1}]
              (let [entities [{:column 1,:line 1} {:column 1,:line 6}]
                    source (java.io.StringReader. "(def x 23)")]
                (src-rdr/add-source-to-interns-with-reader source entities)))))
 
     (testing "not entities in source"
       "this might be kind of unexpected but the reader des not care bout lines"
-      (is (= [{:source "(def y 24)" :column 1,:line 3} {:source "" :column 1,:line 6}]
+      (is (= [{:source "(def y 24)" :column 1,:line 3}]
              (let [entities [{:column 1,:line 3} {:column 1,:line 6}]
                    source (java.io.StringReader. "(def x 23)\n\n(def y 24)")]
                (src-rdr/add-source-to-interns-with-reader source entities)))))))

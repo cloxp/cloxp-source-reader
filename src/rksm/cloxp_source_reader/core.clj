@@ -2,7 +2,8 @@
   (:require [clojure.tools.reader.reader-types :as trt]
             [clojure.tools.reader :as tr]
             [clojure.string :as s]
-            [rksm.system-files :refer (source-reader-for-ns)])
+            [rksm.system-files :refer (source-reader-for-ns)]
+            (cljx core rules))
   (:import (java.io LineNumberReader InputStreamReader PushbackReader)
            (clojure.lang RT)))
 
@@ -33,7 +34,9 @@
   :column} map. Note: this is more that the typical reader gives us."
   [rdr-or-src]
   ; FIXME this is hacked...
-  (let [rdr (trt/indexing-push-back-reader (trt/source-logging-push-back-reader rdr-or-src))]
+  (let [rdr (trt/indexing-push-back-reader
+             (trt/source-logging-push-back-reader
+              rdr-or-src))]
     (loop [result []]
       (let [start-line (trt/get-line-number rdr)
             start-column (trt/get-column-number rdr)]
@@ -46,59 +49,42 @@
                 src-lines (assoc (vec src-lines) 0 (nth first-line-ws-match 2))
                 src (s/join "\n" src-lines)
                 line (+ (count no-ws-lines) start-line)
-                column (+ start-column (count (second first-line-ws-match)))]
+                column (+ start-column (count (second first-line-ws-match)))
+                meta (meta o)
+                def? (def? o)
+                name (if def? (name-of-def o))]
             (when (= \newline (trt/peek-char rdr))
               (trt/read-char rdr)
               (purge-string! rdr))
-            (recur (conj result {:form (if (def? o)
-                                         (with-meta o (assoc (meta o) :source src))
-                                         o)
-                                 :source src
-                                 :line line
-                                 :column column})))
+            (recur (conj result
+                         (merge {:form o, :source src,
+                                 :line line, :column column,
+                                 :end-line (trt/get-line-number rdr),
+                                 :end-column (trt/get-column-number rdr)}
+                                (if def?
+                                  {:form (with-meta o (assoc meta :source src)),
+                                   :name name})))))
           result)))))
-
-(defn- read-next-obj
-  "follows the reader while it core/reads an object and returns the string in
-  range of what was read"
-  [rdr]
-  (let [text (StringBuilder.) 
-        pbr (proxy [PushbackReader] [rdr]
-                   (read []
-                         (let [i (proxy-super read)]
-                           (if (> i -1) (.append text (char i)))
-                           i)))]
-    (if (= :unknown *read-eval*)
-      (throw (IllegalStateException. "Unable to read source while *read-eval* is :unknown."))
-      (let [form (tr/read (PushbackReader. pbr) false nil)
-            source (str text)]
-        {:form form, :source source}))))
-
-(defn- read-entity-source
-  "goes forward in line numbering reader until line of entity is reached and
-  reads that as an object"
-  [{:keys [lrdr sources], :as record} {expected-name :name, :as meta-entity}]
-  lrdr
-  (or (when-let [line (:line meta-entity)]
-        (dotimes [_ (dec (- line (.getLineNumber lrdr)))] (.readLine lrdr))
-        (let [{:keys [form source]} (read-next-obj lrdr)
-              name (name-of-def form)
-              new-meta (merge meta-entity {:source source})]
-          (if (or (nil? expected-name) (= name (:name meta-entity)))
-            (update-in record [:sources] conj new-meta)
-            record)))
-      record))
 
 (defn add-source-to-interns-with-reader
   "interns are supposed to be meta-data-like maps, at least including :line for
   the entity to be read"
-  [rdr interns]
-  {:pre [every? #(number? (:line %)) interns]}
-  (let [interns (sort-by :line interns)
-        source-data {:lrdr (LineNumberReader. rdr), :sources []}]
-    (if-let [result (reduce read-entity-source source-data interns)]
-      (:sources result)
-      interns)))
+  [rdr interns & [opts]]
+  {:pre [every? #((or (contains? (:line %)) 
+                      (contains? (:name %)))) interns]}
+  (let [objs (read-objs (slurp rdr))
+        obj-map (apply sorted-map (mapcat (juxt :name identity) objs))]
+    (sort-by
+     :line
+     (keep (fn [{n :name l :line c :column, :as meta-entity}]
+             (if-let [{s :source}
+                      (if n
+                        (get obj-map n)
+                        (->> objs
+                          (filter (fn [{c2 :column, l2 :line}] (and (= c c2) (= l l2))))
+                          first))]
+               (assoc meta-entity :source s)))
+           interns))))
 
 (defn add-source-to-interns
   "alternative for `source-for-symbol`. Instead of using clojure.repl this
@@ -107,23 +93,20 @@
   NOTE: If there are multiple versions a lib on the classpath than it is
   possible that this function will retrieve code that i not actually in the
   system! (and the system meta data will clash with the actual file contents)"
-  [ns interns & [ns-file-path]]
-  (if-let [rdr (source-reader-for-ns ns ns-file-path)]
-    (with-open [rdr rdr]
-      (add-source-to-interns-with-reader rdr interns))
-    interns))
-
-(defn add-source-to-interns
-  "alternative for `source-for-symbol`. Instead of using clojure.repl this
-  functions uses the classloader info provided by system-files to find more
-  recent versions of the source.
-  NOTE: If there are multiple versions a lib on the classpath than it is
-  possible that this function will retrieve code that i not actually in the
-  system! (and the system meta data will clash with the actual file contents)"
-  [ns interns & [ns-file-path]]
-  (if-let [rdr (source-reader-for-ns ns ns-file-path)]
-    (with-open [rdr rdr]
-      (add-source-to-interns-with-reader rdr interns))
+  [ns interns & [{:keys [file cljx?]} :as opts]]
+  [file cljx?]
+  (if-let [rdr (source-reader-for-ns ns file)]
+    (let [cljx? (or cljx? (and
+                           (nil? cljx?)
+                           (string? file)
+                           (re-find #"\.cljx$" file)))
+          rdr (if cljx? 
+                (->  (slurp rdr)
+                  (cljx.core/transform cljx.rules/clj-rules)
+                  java.io.StringReader.)
+                rdr)]
+      (with-open [rdr rdr]
+        (add-source-to-interns-with-reader rdr interns opts)))
     interns))
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
