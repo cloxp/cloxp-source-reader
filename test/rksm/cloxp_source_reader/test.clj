@@ -63,15 +63,15 @@
   (testing "extract meta entities from source"
 
     (testing "meta entities match source"
-      (is (= [{:source "(def x 23)" :column 1,:line 1}
-              {:source "(def y 24)" :column 1,:line 2}]
+      (is (= [{:source "(def x 23)\n" :column 1,:line 1}
+              {:source "(def y 24)\n" :column 1,:line 2}]
              (let [entities [{:column 1,:line 1} {:column 1,:line 2}]
                    source (java.io.StringReader. "(def x 23)\n(def y 24)\n")]
                (src-rdr/add-source-to-interns-with-reader source entities)))))
 
     (testing "less meta entities than source"
-      (is (= [{:source "(def x 23)" :column 1,:line 1}
-              {:source "(def y 24)" :column 1,:line 6}]
+      (is (= [{:source "(def x 23)\n" :column 1,:line 1}
+              {:source "(def y 24)\n" :column 1,:line 6}]
              (let [entities [{:column 1,:line 1} {:column 1,:line 6}]
                    source (java.io.StringReader. "(def x 23)\n(def baz\n\n99)\n\n(def y 24)\n")]
                (src-rdr/add-source-to-interns-with-reader source entities)))))

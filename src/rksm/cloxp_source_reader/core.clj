@@ -7,6 +7,35 @@
   (:import (java.io LineNumberReader InputStreamReader PushbackReader)
            (clojure.lang RT)))
 
+; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+; string helper
+
+(defn- line-column-access
+  [string]
+  (let [lines (s/split-lines string)]
+    (fn line-column-access-for-string
+      [{start-line :line start-column :column :as s} {end-line :line end-column :column :as e}]
+      (if (or (> start-line end-line) (and (= start-line end-line) (> start-column end-column)))
+        (line-column-access-for-string e s)
+        (let [start  (nth lines (dec start-line))
+              start (.substring start (dec start-column) (count start))
+              end  (if (= start-line end-line)
+                     start (nth lines (min (dec (count lines)) (dec end-line))))
+              end (.substring end 0 (dec end-column))
+              inbetween (->> lines (drop start-line) (take (dec (- end-line start-line))))]
+          (s/join "\n"
+                  (if (= start-line end-line)
+                    [end]
+                    (concat [start] inbetween [end]))))))))
+
+(comment
+ (def s "hello\nworld\n\nfoo\nbar\n\n")
+ ((line-column-access s) {:line 3 :column 1} {:line 2 :column 3})
+ ((line-column-access s) {:line 2 :column 3} {:line 3 :column 1})
+ ((line-column-access s) {:line 1 :column 1} {:line 3 :column 1}))
+
+; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
 (defn name-of-def
   [form]
   (first (drop 1 (filter symbol? form))))
@@ -69,21 +98,29 @@
 (defn add-source-to-interns-with-reader
   "interns are supposed to be meta-data-like maps, at least including :line for
   the entity to be read"
-  [rdr interns & [opts]]
-  {:pre [every? #((or (contains? (:line %)) 
+  [rdr interns & [{:keys [cljx?] :as opts}]]
+  {:pre [every? #((or (contains? (:line %))
                       (contains? (:name %)))) interns]}
-  (let [objs (read-objs (slurp rdr))
+  (let [file-source (slurp rdr)
+        clj-source (if cljx?
+                     (cljx.core/transform file-source cljx.rules/clj-rules)
+                     file-source)
+        objs (doall (read-objs clj-source))
         obj-map (apply sorted-map (mapcat (juxt :name identity) objs))]
     (sort-by
      :line
      (keep (fn [{n :name l :line c :column, :as meta-entity}]
-             (if-let [{s :source}
+             (if-let [{:keys [line column end-line end-column source]}
                       (if n
                         (get obj-map n)
                         (->> objs
                           (filter (fn [{c2 :column, l2 :line}] (and (= c c2) (= l l2))))
                           first))]
-               (assoc meta-entity :source s)))
+               ;   (assoc meta-entity :source source)
+               (assoc meta-entity :source
+                      ((line-column-access file-source)
+                       {:line line :column column}
+                       {:line end-line :column end-column}))))
            interns))))
 
 (defn add-source-to-interns
@@ -95,19 +132,12 @@
   system! (and the system meta data will clash with the actual file contents)"
   [ns interns & [{:keys [file cljx?]} :as opts]]
   [file cljx?]
-  (if-let [rdr (source-reader-for-ns ns file)]
-    (let [cljx? (or cljx? (and
-                           (nil? cljx?)
-                           (string? file)
-                           (re-find #"\.cljx$" file)))
-          rdr (if cljx? 
-                (->  (slurp rdr)
-                  (cljx.core/transform cljx.rules/clj-rules)
-                  java.io.StringReader.)
-                rdr)]
+  (let [file (rksm.system-files/file-for-ns ns file)
+        cljx? (or cljx? (and (nil? cljx?) (boolean (re-find #"\.cljx$" (str file)))))]
+    (if-let [rdr (source-reader-for-ns ns file)]
       (with-open [rdr rdr]
-        (add-source-to-interns-with-reader rdr interns opts)))
-    interns))
+        (add-source-to-interns-with-reader rdr interns {assoc opts :cljx? cljx?}))
+      interns)))
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
