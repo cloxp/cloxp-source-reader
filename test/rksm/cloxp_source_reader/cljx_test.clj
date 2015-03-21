@@ -18,18 +18,18 @@
         sources (map :source meta-data)
         expected '("(defn x-to-string\n  [x]\n  (let [buf #+clj (StringBuilder.) #+cljs (gstring/StringBuffer.)]\n    (.append buf \"x is: \")\n    (.append buf (str x))))\n"
                    "(def x 23)\n"
-                   "(def y #+clj 24 #+cljx 25)")]
+                   "(def y #+clj 24 #+cljx 25)\n")]
     (is (= expected sources))))
 
 (deftest read-objs-cljx
   (let [result (src-rdr/read-objs "(def y #+clj 24 #+cljx 25)")
         expected '({:name y,
                     :form (def y 24),
-                    :source "(def y #+clj 24 #+cljx 25)",
+                    :source "(def y #+clj 24 #+cljx 25)\n",
                     :line 1,
                     :column 1,
-                    :end-line 1,
-                    :end-column 27})]
+                    :end-line 2,
+                    :end-column 1})]
     (is (= expected result))))
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-

@@ -18,7 +18,7 @@
       (if (or (> start-line end-line) (and (= start-line end-line) (> start-column end-column)))
         (line-column-access-for-string e s)
         (let [start  (nth lines (dec start-line))
-              start (.substring start (dec start-column) (count start))
+              start (.substring start (dec start-column))
               end  (if (= start-line end-line)
                      start
                      (nth lines (min (dec (count lines)) (dec end-line))))
@@ -65,7 +65,8 @@
   :column} map. Note: this is more that the typical reader gives us."
   [source & [{:keys [cljx?] :or {cljx? true} :as opts}]]
   ; FIXME this is hacked...
-  (let [tfm-source (if cljx? (cljx.core/transform source cljx.rules/clj-rules) source)
+  (let [source (if-not (.endsWith source "\n") (str source "\n") source)
+        tfm-source (if cljx? (cljx.core/transform source cljx.rules/clj-rules) source)
         get-src-fn (line-column-access source)
         rdr (trt/indexing-push-back-reader
              (trt/source-logging-push-back-reader
@@ -74,15 +75,17 @@
       (let [start-line (trt/get-line-number rdr)
             start-column (trt/get-column-number rdr)]
         (if-let [o (tr/read rdr false nil)]
-          (let [raw-str (purge-string! rdr)
+          (let [; get the string from the reader:
+                raw-str (purge-string! rdr)
                 lines (s/split-lines raw-str)
+                ; trim surrounding whitespace and offset line / column accordingly
                 no-ws-lines (take-while #(re-find #"^\s*(;.*)?$" %) lines)
                 src-lines (drop (count no-ws-lines) lines)
-                first-line-ws-match (re-matches #"^(\s*)(.*)" (first src-lines))
-                src-lines (assoc (vec src-lines) 0 (nth first-line-ws-match 2))
+                [_ leading-ws first-line-content] (re-matches #"^(\s*)(.*)" (first src-lines))
+                src-lines (assoc (vec src-lines) 0 first-line-content)
                 src (s/join "\n" src-lines)
-                line (+ (count no-ws-lines) start-line)
-                column (+ start-column (count (second first-line-ws-match)))
+                line (+ start-line (count no-ws-lines))
+                column (+ start-column (count leading-ws))
                 meta (meta o)
                 def? (def? o)
                 name (if def? (name-of-def o))]
@@ -124,11 +127,11 @@
                         (->> objs
                           (filter (fn [{c2 :column, l2 :line}] (and (= c c2) (= l l2))))
                           first))]
-               ;   (assoc meta-entity :source source)
-               (assoc meta-entity :source
+            ;   (assoc meta-entity :source source)
+              (assoc meta-entity :source
                       (get-src-fn
-                       {:line line :column column}
-                       {:line end-line :column end-column}))))
+                      {:line line :column column}
+                      {:line end-line :column end-column}))))
            interns))))
 
 (defn add-source-to-interns
