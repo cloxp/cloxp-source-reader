@@ -21,6 +21,17 @@
                    "(def y #+clj 24 #+cljx 25)")]
     (is (= expected sources))))
 
+(deftest read-objs-cljx
+  (let [result (src-rdr/read-objs "(def y #+clj 24 #+cljx 25)")
+        expected '({:name y,
+                    :form (def y 24),
+                    :source "(def y #+clj 24 #+cljx 25)",
+                    :line 1,
+                    :column 1,
+                    :end-line 1,
+                    :end-column 27})]
+    (is (= expected result))))
+
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 (comment

@@ -20,8 +20,9 @@
         (let [start  (nth lines (dec start-line))
               start (.substring start (dec start-column) (count start))
               end  (if (= start-line end-line)
-                     start (nth lines (min (dec (count lines)) (dec end-line))))
-              end (.substring end 0 (dec end-column))
+                     start
+                     (nth lines (min (dec (count lines)) (dec end-line))))
+              end (.substring end 0 (if (= start-line end-line) (- (dec end-column) (dec start-column)) (dec end-column)))
               inbetween (->> lines (drop start-line) (take (dec (- end-line start-line))))]
           (s/join "\n"
                   (if (= start-line end-line)
@@ -31,6 +32,7 @@
 (comment
  (def s "hello\nworld\n\nfoo\nbar\n\n")
  ((line-column-access s) {:line 3 :column 1} {:line 2 :column 3})
+ ((line-column-access s) {:line 1 :column 5} {:line 1 :column 4})
  ((line-column-access s) {:line 2 :column 3} {:line 3 :column 1})
  ((line-column-access s) {:line 1 :column 1} {:line 3 :column 1}))
 
@@ -59,13 +61,15 @@
     (tr/read rdr)))
 
 (defn read-objs
-  "Reads sexps from rdr-or-src and returns them as a {:form :source :line
+  "Reads sexps from source and returns them as a {:form :source :line
   :column} map. Note: this is more that the typical reader gives us."
-  [rdr-or-src]
+  [source & [{:keys [cljx?] :or {cljx? true} :as opts}]]
   ; FIXME this is hacked...
-  (let [rdr (trt/indexing-push-back-reader
+  (let [tfm-source (if cljx? (cljx.core/transform source cljx.rules/clj-rules) source)
+        get-src-fn (line-column-access source)
+        rdr (trt/indexing-push-back-reader
              (trt/source-logging-push-back-reader
-              rdr-or-src))]
+              tfm-source))]
     (loop [result []]
       (let [start-line (trt/get-line-number rdr)
             start-column (trt/get-column-number rdr)]
@@ -85,14 +89,17 @@
             (when (= \newline (trt/peek-char rdr))
               (trt/read-char rdr)
               (purge-string! rdr))
-            (recur (conj result
-                         (merge {:form o, :source src,
-                                 :line line, :column column,
-                                 :end-line (trt/get-line-number rdr),
-                                 :end-column (trt/get-column-number rdr)}
-                                (if def?
-                                  {:form (with-meta o (assoc meta :source src)),
-                                   :name name})))))
+            (let [start {:line line :column column}
+                  end-line (trt/get-line-number rdr)
+                  end-column (trt/get-column-number rdr)
+                  source (get-src-fn start {:line end-line :column end-column})]
+              (recur (conj result
+                           (merge start
+                                  {:end-line end-line :end-column end-column}
+                                  {:form o, :source source}
+                                  (if def?
+                                    {:form (with-meta o (assoc meta :source src)),
+                                     :name name}))))))
           result)))))
 
 (defn add-source-to-interns-with-reader
@@ -102,6 +109,7 @@
   {:pre [every? #((or (contains? (:line %))
                       (contains? (:name %)))) interns]}
   (let [file-source (slurp rdr)
+        get-src-fn (line-column-access file-source)
         clj-source (if cljx?
                      (cljx.core/transform file-source cljx.rules/clj-rules)
                      file-source)
@@ -118,7 +126,7 @@
                           first))]
                ;   (assoc meta-entity :source source)
                (assoc meta-entity :source
-                      ((line-column-access file-source)
+                      (get-src-fn
                        {:line line :column column}
                        {:line end-line :column end-column}))))
            interns))))

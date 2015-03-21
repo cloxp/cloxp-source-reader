@@ -24,10 +24,10 @@
 
   (testing "simple read"
     (is (= [{:form '(ns rksm.cloxp-source-reader.test.dummy-3),
-             :source "(ns rksm.cloxp-source-reader.test.dummy-3)",
+             :source "(ns rksm.cloxp-source-reader.test.dummy-3)\n",
              :line 1, :column 1
              :end-line 2, :end-column 1}
-            {:form '(def x 23), :source "(def x 23)",
+            {:form '(def x 23), :source "(def x 23)\n",
              :name 'x
              :line 2, :column 3,
              :end-line 3, :end-column 1}]
@@ -39,13 +39,13 @@
     (let [src "(ns rksm.cloxp-source-reader.test.dummy-3)\n  (defmacro b [] `~23)\n(+ 2 3)\n(defn foo [] `~23)\n"
           expected [{:ns 'rksm.cloxp-source-reader.test.dummy-3,
                      :name 'foo,
-                     :source "(defn foo [] `~23)",
+                     :source "(defn foo [] `~23)\n",
                      :line 4
                     ;  :column 1 :end-line 3, :end-column 1
                      }
                     {:ns 'rksm.cloxp-source-reader.test.dummy-3,
                      :name 'b,
-                     :source "(defmacro b [] `~23)"
+                     :source "(defmacro b [] `~23)\n"
                      :line 2,
                     ;  :column 1, :end-line 3, :end-column 1
                      }]]
