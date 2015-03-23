@@ -34,9 +34,30 @@
  ((line-column-access s) {:line 3 :column 1} {:line 2 :column 3})
  ((line-column-access s) {:line 1 :column 5} {:line 1 :column 4})
  ((line-column-access s) {:line 2 :column 3} {:line 3 :column 1})
- ((line-column-access s) {:line 1 :column 1} {:line 3 :column 1}))
+ ((line-column-access s) {:line 1 :column 1} {:line 1 :column 2})
+ )
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+(defn- make-reader
+  "Currently using direct instantiation of reader b/c there seems to be a bug
+  in tools reader regarding line number access, see comment"
+  [source & [file-name]]
+  (comment
+   ; this is a bug!!
+   (assert (= 1 (.get_line_number
+                 (trt/source-logging-push-back-reader "")))))
+  (trt/->SourceLoggingPushbackReader
+    (trt/string-push-back-reader source 1)
+    1 ; line
+    1 ; column
+    true ; line-start?
+    nil ; prev
+    0 ; prev-column
+    file-name ; file-name
+    (doto (clojure.tools.reader.impl.utils/make-var)
+      (alter-var-root (constantly {:buffer (StringBuilder.)
+                                   :offset 0})))))
 
 (defn name-of-def
   [form]
@@ -49,7 +70,7 @@
 
 (defn purge-string!
   [rdr]
-  (let [buf (-> rdr .rdr .source_log_frames var-get :buffer)
+  (let [buf (-> rdr .source_log_frames var-get :buffer)
         str (.toString buf)]
     (.delete buf 0 (count str))
     str))
@@ -57,8 +78,10 @@
 (defn read-with-source-logger
   "reads a single next obj from *current-code* :source"
   [src]
-  (let [rdr (trt/source-logging-push-back-reader src)]
+  (let [rdr (make-reader src)]
     (tr/read rdr)))
+
+(def src-access (atom nil))
 
 (defn read-objs
   "Reads sexps from source and returns them as a {:form :source :line
@@ -68,9 +91,7 @@
   (let [source (if-not (.endsWith source "\n") (str source "\n") source)
         tfm-source (if cljx? (cljx.core/transform source cljx.rules/clj-rules) source)
         get-src-fn (line-column-access source)
-        rdr (trt/indexing-push-back-reader
-             (trt/source-logging-push-back-reader
-              tfm-source))]
+        rdr (make-reader tfm-source)]
     (loop [result []]
       (let [start-line (trt/get-line-number rdr)
             start-column (trt/get-column-number rdr)]
@@ -118,21 +139,19 @@
                      file-source)
         objs (doall (read-objs clj-source))
         obj-map (apply sorted-map (mapcat (juxt :name identity) objs))]
-    (sort-by
-     :line
-     (keep (fn [{n :name l :line c :column, :as meta-entity}]
-             (if-let [{:keys [line column end-line end-column source]}
-                      (if n
-                        (get obj-map n)
-                        (->> objs
-                          (filter (fn [{c2 :column, l2 :line}] (and (= c c2) (= l l2))))
-                          first))]
-            ;   (assoc meta-entity :source source)
-              (assoc meta-entity :source
-                      (get-src-fn
-                      {:line line :column column}
-                      {:line end-line :column end-column}))))
-           interns))))
+    (sort-by :line (keep (fn [{n :name l :line c :column, :as meta-entity}]
+                           (if-let [{:keys [line column end-line end-column source]}
+                                    (if n
+                                      (get obj-map n)
+                                      (->> objs
+                                        (filter (fn [{c2 :column, l2 :line}] (and (= c c2) (= l l2))))
+                                        first))]
+                             ;   (assoc meta-entity :source source)
+                             (assoc meta-entity :source
+                                    (get-src-fn
+                                     {:line line :column column}
+                                     {:line end-line :column end-column}))))
+                         interns))))
 
 (defn add-source-to-interns
   "alternative for `source-for-symbol`. Instead of using clojure.repl this
