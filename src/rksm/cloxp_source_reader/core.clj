@@ -135,6 +135,7 @@
                       (contains? (:name %)))) interns]}
   (let [file-source (slurp rdr)
         get-src-fn (line-column-access file-source)
+        interns (sort-by :line interns)
         clj-source (if cljx?
                      (cljx.core/transform file-source cljx.rules/clj-rules)
                      file-source)
