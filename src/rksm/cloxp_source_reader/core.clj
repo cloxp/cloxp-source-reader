@@ -101,13 +101,13 @@
                 raw-str (purge-string! rdr)
                 lines (s/split-lines raw-str)
                 ; trim surrounding whitespace and offset line / column accordingly
-                no-ws-lines (take-while #(re-find #"^\s*(;.*)?$" %) lines)
-                src-lines (drop (count no-ws-lines) lines)
+                ws-lines (take-while #(re-find #"^\s*(;.*)?$" %) lines)
+                src-lines (drop (count ws-lines) lines)
                 [_ leading-ws first-line-content] (re-matches #"^(\s*)(.*)" (first src-lines))
                 src-lines (assoc (vec src-lines) 0 first-line-content)
                 src (s/join "\n" src-lines)
-                line (+ start-line (count no-ws-lines))
-                column (+ start-column (count leading-ws))
+                line (+ start-line (count ws-lines))
+                column (+ (if (> (count ws-lines) 0) 1 start-column) (count leading-ws))
                 meta (meta o)
                 def? (def? o)
                 name (if def? (name-of-def o))]
