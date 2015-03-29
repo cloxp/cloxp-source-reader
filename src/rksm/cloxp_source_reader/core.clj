@@ -1,5 +1,6 @@
 (ns rksm.cloxp-source-reader.core
   (:require [clojure.tools.reader.reader-types :as trt]
+            [clojure.tools.reader.impl.utils]
             [clojure.tools.reader :as tr]
             [clojure.string :as s]
             [rksm.system-files :refer (source-reader-for-ns)]
