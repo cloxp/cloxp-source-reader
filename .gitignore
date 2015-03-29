@@ -3,3 +3,4 @@
 /.nrepl-port
 /rel-path
 /.lein-failures
+/cloxp-cljs-build/
