@@ -1,6 +1,7 @@
 (defproject org.rksm/cloxp-source-reader "0.1.0-SNAPSHOT"
   :description "Source reading, parsing, and querying for cloxp."
-  :license "MIT"
+  :license {:name "MIT License"
+            :url "http://opensource.org/licenses/MIT"}
   :url "http://github.com/cloxp/cloxp-source-reader"
   :dependencies [[org.clojure/clojure "1.6.0"]
                  [org.clojure/tools.reader "0.8.16"]
