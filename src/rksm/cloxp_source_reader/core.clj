@@ -2,6 +2,7 @@
   (:require [clojure.tools.reader.reader-types :as trt]
             [clojure.tools.reader.impl.utils]
             [clojure.tools.reader :as tr]
+            [clojure.tools.namespace.parse :as tnp]
             [clojure.string :as s]
             [rksm.system-files :refer (source-reader-for-ns)]
             (cljx core rules))
@@ -173,18 +174,6 @@
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-; (defn add-source-to-interns-from-repl
-;   "This method uses the RT/baseloader to lookup the files belonging to symbols.
-;   When files get reloaded / defs redefined this can mean that the code being
-;   retrieved is outdated"
-;   [ns intern-meta-data]
-;   (let [ns-string (str (ns-name ns))
-;         sym-fn (partial symbol ns-string)
-;         source-fn #(or (source-for-symbol (sym-fn (-> % :name str))) "")]
-;     (map #(assoc % :source (source-fn %)) intern-meta-data)))
-
-; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-
 (defn updated-source
   "Takes the new source for a def and produces a new version of the ns source,
   with the new def code embedded. meta-info is a meta-data like structure."
@@ -197,3 +186,20 @@
                       s/split-lines count
                       (drop (drop line lines)))]
     (str (s/join "\n" (concat before-lines [(s/trim-newline new-src-for-def)] after-lines)))))
+
+(defn read-ns-decl
+  [source-or-rdr]
+  (let [rdr (if (instance? java.io.PushbackReader source-or-rdr)
+              source-or-rdr
+              (-> source-or-rdr
+                java.io.StringReader.
+                java.io.PushbackReader.))]
+    (tnp/read-ns-decl rdr)))
+
+(defn read-ns-sym
+  [source-or-rdr]
+  (some-> source-or-rdr read-ns-decl second))
+
+(comment
+ (read-ns-sym "foo\n(ns ^{:doc \"baz\"} bar)")
+ )

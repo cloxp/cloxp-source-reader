@@ -5,6 +5,7 @@
   :url "http://github.com/cloxp/cloxp-source-reader"
   :dependencies [[org.clojure/clojure "1.6.0"]
                  [org.clojure/tools.reader "0.8.16"]
+                 [org.clojure/tools.namespace "0.2.8"]
                  [org.clojure/tools.analyzer.jvm "0.6.5"]
                  [org.rksm/system-files "0.1.4-SNAPSHOT"]
                  [com.keminglabs/cljx "0.6.0"]])

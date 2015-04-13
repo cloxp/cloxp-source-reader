@@ -89,6 +89,9 @@
                    source (java.io.StringReader. "(def x 23)\n\n(def y 24)")]
                (src-rdr/add-source-to-interns-with-reader source entities)))))))
 
+(deftest ns-decl-read-test
+  (is (= 'bar (src-rdr/read-ns-sym "foo\n(ns ^{:doc \"baz\"} bar)"))))
+
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 (comment
