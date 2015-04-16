@@ -57,9 +57,9 @@
     nil ; prev
     0 ; prev-column
     file-name ; file-name
-    (doto (clojure.tools.reader.impl.utils/make-var)
-      (alter-var-root (constantly {:buffer (StringBuilder.)
-                                   :offset 0})))))
+	(doto (with-local-vars [x nil] x)
+		(alter-var-root (constantly {:buffer (StringBuilder.)
+	                 				 :offset 0})))))
 
 (defn name-of-def
   [form]
