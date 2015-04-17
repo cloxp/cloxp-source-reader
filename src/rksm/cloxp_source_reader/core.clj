@@ -51,7 +51,7 @@
                  (trt/source-logging-push-back-reader "")))))
   (trt/->SourceLoggingPushbackReader
     (trt/string-push-back-reader source 1)
-    1 ; line
+    1 ; line <-- bug here, 0 or 1???
     1 ; column
     true ; line-start?
     nil ; prev
