@@ -1,4 +1,4 @@
-(defproject org.rksm/cloxp-source-reader "0.1.3"
+(defproject org.rksm/cloxp-source-reader "0.1.4"
   :description "Source reading, parsing, and querying for cloxp."
   :license {:name "MIT License"
             :url "http://opensource.org/licenses/MIT"}
@@ -7,5 +7,5 @@
                  [org.clojure/tools.reader "0.9.1"]
                  [org.clojure/tools.namespace "0.2.8"]
                  [org.clojure/tools.analyzer.jvm "0.6.5"]
-                 [org.rksm/system-files "0.1.4"]
+                 [org.rksm/system-files "0.1.5"]
                  [com.keminglabs/cljx "0.6.0"]])
