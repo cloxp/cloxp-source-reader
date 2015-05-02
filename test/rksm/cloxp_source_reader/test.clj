@@ -4,6 +4,10 @@
             [rksm.cloxp-source-reader.ast-reader :as ast-rdr]
             (rksm.cloxp-source-reader.test dummy-1 dummy-3)))
 
+(defmacro codify
+  [& body]
+  `(clojure.string/join "\n" (map str '~body)))
+
 (deftest source-reader-matches-interns
   (remove-ns 'rksm.cloxp-source-reader.test.dummy-3)
   (require 'rksm.cloxp-source-reader.test.dummy-3 :reload)
@@ -88,6 +92,13 @@
              (let [entities [{:column 1,:line 3} {:column 1,:line 6}]
                    source (java.io.StringReader. "(def x 23)\n\n(def y 24)")]
                (src-rdr/add-source-to-interns-with-reader source entities)))))))
+
+(deftest multimethod-reading
+  (is (= '(nil nil ":a")
+         (map :defmethod-qualifier
+              (src-rdr/read-objs (codify (ns multi-test-1)
+                                         (defmulti multi-f (fn [x & _] x))
+                                         (defmethod multi-f :a [_ x] (+ x 3))))))))
 
 (deftest ns-decl-read-test
   (is (= 'bar (src-rdr/read-ns-sym "foo\n(ns ^{:doc \"baz\"} bar)"))))

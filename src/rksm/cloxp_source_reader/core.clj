@@ -67,9 +67,35 @@
   (first (drop 1 (filter symbol? form))))
 
 (defn def?
-  [form]
+  [[a & _ :as form]]
   (and (seq? form)
-       (->> form first str (re-find #"(^|\/)def") boolean)))
+       (boolean (re-find #"(^|\/)def" (str a)))))
+
+(defn defmethod?
+  [[a & _ :as form]]
+  (= a 'defmethod))
+
+(defn defmulti?
+  [[a & _ :as form]]
+  (= a 'defmulti))
+
+(defn defmethod-qualifier
+  "takes a defmethod form and extract the match args from it, like
+  '(defmethod ^{:dynamic true}foo-method String [::foo \"Bar\"] ([x] (.toUpperCase x)))
+  =>
+  '(String [:user/foo \"Bar\"])"
+  [form]
+  (let [ex-form (macroexpand form)
+        [_ _ _ match-1 fn-def] ex-form
+        rest-matches (if (= (->> fn-def last (map type))
+                            [clojure.lang.PersistentVector clojure.lang.PersistentList])
+                       (->> fn-def (drop 1) (drop-last))
+                       (->> fn-def (drop 1) (drop-last 2)))]
+    (cons match-1 rest-matches)))
+
+(defn defmethod-qualifier-string
+  [form]
+  (clojure.string/join "-" (defmethod-qualifier form)))
 
 (defn purge-string!
   [rdr]
@@ -112,7 +138,9 @@
                 column (+ (if (> (count ws-lines) 0) 1 start-column) (count leading-ws))
                 meta (meta o)
                 def? (def? o)
-                name (if def? (name-of-def o))]
+                defmethod? (defmethod? o)
+                name (if def? (name-of-def o))
+                defmethod-name (defmethod-qualifier-string o)]
             (when (= \newline (trt/peek-char rdr))
               (trt/read-char rdr)
               (purge-string! rdr))
@@ -126,7 +154,9 @@
                                   {:form o, :source source}
                                   (if def?
                                     {:form (with-meta o (assoc meta :source src)),
-                                     :name name}))))))
+                                     :name name})
+                                  (if defmethod?
+                                    {:defmethod-qualifier defmethod-name}))))))
           result)))))
 
 (defn add-source-to-interns-with-reader
