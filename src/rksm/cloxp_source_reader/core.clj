@@ -67,17 +67,19 @@
   (first (drop 1 (filter symbol? form))))
 
 (defn def?
-  [[a & _ :as form]]
+  [form]
   (and (seq? form)
-       (boolean (re-find #"(^|\/)def" (str a)))))
+       (boolean (re-find #"(^|\/)def" (str (first form))))))
 
 (defn defmethod?
-  [[a & _ :as form]]
-  (= a 'defmethod))
+  [form]
+  (and (seq? form)
+       (= 'defmethod (first form))))
 
 (defn defmulti?
-  [[a & _ :as form]]
-  (= a 'defmulti))
+  [form]
+  (and (seq? form)
+       (= 'defmulti (first form))))
 
 (defn defmethod-qualifier
   "takes a defmethod form and extract the match args from it, like
@@ -85,13 +87,14 @@
   =>
   '(String [:user/foo \"Bar\"])"
   [form]
-  (let [ex-form (macroexpand form)
-        [_ _ _ match-1 fn-def] ex-form
-        rest-matches (if (= (->> fn-def last (map type))
-                            [clojure.lang.PersistentVector clojure.lang.PersistentList])
-                       (->> fn-def (drop 1) (drop-last))
-                       (->> fn-def (drop 1) (drop-last 2)))]
-    (cons match-1 rest-matches)))
+  (if (seq? form)
+    (let [ex-form (macroexpand form)
+          [_ _ _ match-1 fn-def] ex-form
+          rest-matches (if (= (->> fn-def last (map type))
+                              [clojure.lang.PersistentVector clojure.lang.PersistentList])
+                         (->> fn-def (drop 1) (drop-last))
+                         (->> fn-def (drop 1) (drop-last 2)))]
+      (cons match-1 rest-matches))))
 
 (defn defmethod-qualifier-string
   [form]
@@ -115,12 +118,14 @@
 (defn read-objs
   "Reads sexps from source and returns them as a {:form :source :line
   :column} map. Note: this is more that the typical reader gives us."
-  [source & [{:keys [cljx?] :or {cljx? true} :as opts}]]
+  [source & [{:keys [cljx? line-offset column-offset] :or {cljx? true} :as opts}]]
   ; FIXME this is hacked...
   (let [source (if-not (.endsWith source "\n") (str source "\n") source)
         tfm-source (if cljx? (cljx.core/transform source cljx.rules/clj-rules) source)
         get-src-fn (line-column-access source)
-        rdr (make-reader tfm-source)]
+        rdr (make-reader tfm-source)
+        line-offset (or line-offset 0)
+        column-offset (or column-offset 0)]
     (loop [result []]
       (let [start-line (trt/get-line-number rdr)
             start-column (trt/get-column-number rdr)]
@@ -145,12 +150,17 @@
               (trt/read-char rdr)
               (purge-string! rdr))
             (let [start {:line line :column column}
+                  start-for-meta {:line (+ line line-offset)
+                                  :column (if (= 1 start-line) (+ column column-offset) column)}
                   end-line (trt/get-line-number rdr)
                   end-column (trt/get-column-number rdr)
-                  source (get-src-fn start {:line end-line :column end-column})]
+                  end {:line end-line :column end-column}
+                  end-for-meta {:end-line (+ end-line line-offset)
+                                :end-column (if (= 1 start-line) (+ end-column column-offset) end-column)}
+                  source (get-src-fn start end)]
               (recur (conj result
-                           (merge start
-                                  {:end-line end-line :end-column end-column}
+                           (merge start-for-meta
+                                  end-for-meta
                                   {:form o, :source source}
                                   (if def?
                                     {:form (with-meta o (assoc meta :source src)),
