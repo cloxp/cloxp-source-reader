@@ -87,7 +87,7 @@
   =>
   '(String [:user/foo \"Bar\"])"
   [form]
-  (if (seq? form)
+  (if (defmethod? form)
     (let [ex-form (macroexpand form)
           [_ _ _ match-1 fn-def] ex-form
           rest-matches (if (= (->> fn-def last (map type))
@@ -143,9 +143,9 @@
                 column (+ (if (> (count ws-lines) 0) 1 start-column) (count leading-ws))
                 meta (meta o)
                 def? (def? o)
-                defmethod? (defmethod? o)
+                defmethod? (if def? (defmethod? o))
                 name (if def? (name-of-def o))
-                defmethod-name (defmethod-qualifier-string o)]
+                defmethod-name (if defmethod? (defmethod-qualifier-string o))]
             (when (= \newline (trt/peek-char rdr))
               (trt/read-char rdr)
               (purge-string! rdr))
