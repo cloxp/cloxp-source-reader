@@ -1,4 +1,4 @@
-(defproject org.rksm/cloxp-source-reader "0.1.7"
+(defproject org.rksm/cloxp-source-reader "0.1.8"
   :description "Source reading, parsing, and querying for cloxp."
   :license {:name "MIT License"
             :url "http://opensource.org/licenses/MIT"}
