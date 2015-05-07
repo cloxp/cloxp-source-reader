@@ -186,11 +186,10 @@
     (sort-by :line (keep (fn [{n :name l :line c :column, :as meta-entity}]
                            (if-let [{:keys [line column end-line end-column source]}
                                     (if n
-                                      (get obj-map n)
+                                      (get obj-map (-> n name symbol))
                                       (->> objs
                                         (filter (fn [{c2 :column, l2 :line}] (and (= c c2) (= l l2))))
                                         first))]
-                             ;   (assoc meta-entity :source source)
                              (assoc meta-entity :source
                                     (get-src-fn
                                      {:line line :column column}
