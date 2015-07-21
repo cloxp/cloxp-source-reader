@@ -3,9 +3,8 @@
   :license {:name "MIT License"
             :url "http://opensource.org/licenses/MIT"}
   :url "http://github.com/cloxp/cloxp-source-reader"
-                 [org.rksm/system-files "0.1.6"]
-                 [com.keminglabs/cljx "0.6.0"]])
   :dependencies [[org.clojure/clojure "1.7.0"]
                  [org.clojure/tools.reader "0.9.2"]
                  [org.clojure/tools.namespace "0.2.10"]
                  [org.clojure/tools.analyzer.jvm "0.6.7"]
+                 [org.rksm/system-files "0.1.6"]])

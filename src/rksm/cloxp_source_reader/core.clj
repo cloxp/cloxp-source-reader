@@ -4,8 +4,7 @@
             [clojure.tools.reader :as tr]
             [clojure.tools.namespace.parse :as tnp]
             [clojure.string :as s]
-            [rksm.system-files :refer (source-reader-for-ns)]
-            (cljx core rules))
+            [rksm.system-files :refer (source-reader-for-ns)])
   (:import (java.io LineNumberReader InputStreamReader PushbackReader)
            (clojure.lang RT)))
 
@@ -111,25 +110,27 @@
   "reads a single next obj from *current-code* :source"
   [src]
   (let [rdr (make-reader src)]
-    (tr/read rdr)))
+    (tr/read {:read-cond :allow} rdr)))
 
 (def src-access (atom nil))
 
 (defn read-objs
   "Reads sexps from source and returns them as a {:form :source :line
   :column} map. Note: this is more that the typical reader gives us."
-  [source & [{:keys [cljx? line-offset column-offset] :or {cljx? true} :as opts}]]
+  [source & [{:keys [features line-offset column-offset] :as opts}]]
   ; FIXME this is hacked...
   (let [source (if-not (.endsWith source "\n") (str source "\n") source)
-        tfm-source (if cljx? (cljx.core/transform source cljx.rules/clj-rules) source)
         get-src-fn (line-column-access source)
-        rdr (make-reader tfm-source)
+        rdr (make-reader source)
         line-offset (or line-offset 0)
-        column-offset (or column-offset 0)]
+        column-offset (or column-offset 0)
+        reader-opts (if features
+                      {:eof nil :read-cond :allow :features (set features)}
+                      {:eof nil :read-cond :preserve})]
     (loop [result []]
       (let [start-line (trt/get-line-number rdr)
             start-column (trt/get-column-number rdr)]
-        (if-let [o (tr/read rdr false nil)]
+        (if-let [o (tr/read reader-opts rdr)]
           (let [; get the string from the reader:
                 raw-str (purge-string! rdr)
                 lines (s/split-lines raw-str)
@@ -172,15 +173,13 @@
 (defn add-source-to-interns-with-reader
   "interns are supposed to be meta-data-like maps, at least including :line for
   the entity to be read"
-  [rdr interns & [{:keys [cljx?] :as opts}]]
+  [rdr interns & [opts]]
   {:pre [every? #((or (contains? (:line %))
                       (contains? (:name %)))) interns]}
   (let [file-source (slurp rdr)
         get-src-fn (line-column-access file-source)
         interns (sort-by :line interns)
-        clj-source (if cljx?
-                     (cljx.core/transform file-source cljx.rules/clj-rules)
-                     file-source)
+        clj-source file-source
         objs (doall (read-objs clj-source))
         obj-map (apply sorted-map (mapcat (juxt :name identity) objs))]
     (sort-by :line (keep (fn [{n :name l :line c :column, :as meta-entity}]
@@ -203,13 +202,12 @@
   NOTE: If there are multiple versions a lib on the classpath than it is
   possible that this function will retrieve code that i not actually in the
   system! (and the system meta data will clash with the actual file contents)"
-  [ns interns & [{:keys [file cljx?]} :as opts]]
-  [file cljx?]
-  (let [file (rksm.system-files/file-for-ns ns file)
-        cljx? (or cljx? (and (nil? cljx?) (boolean (re-find #"\.cljx$" (str file)))))]
+  [ns interns & [{:keys [file]} :as opts]]
+  (let [file (rksm.system-files/file-for-ns ns file)]
     (if-let [rdr (source-reader-for-ns ns file)]
-      (with-open [rdr rdr]
-        (add-source-to-interns-with-reader rdr interns {assoc opts :cljx? cljx?}))
+      (binding [*ns* (find-ns ns)]
+       (with-open [rdr rdr]
+         (add-source-to-interns-with-reader rdr interns opts)))
       interns)))
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
